@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+var (
+	ErrKeyExists = fmt.Errorf("item already exists")
+	ErrCacheMiss = fmt.Errorf("item not found")
+)
+
 type unexportedInterface interface {
 	Set(string, interface{}, time.Duration)
 	Add(string, interface{}, time.Duration) error
@@ -87,7 +92,7 @@ func (c *cache) Add(k string, x interface{}, d time.Duration) error {
 	_, found := c.get(k)
 	if found {
 		c.Unlock()
-		return fmt.Errorf("item %s already exists", k)
+		return ErrKeyExists
 	}
 	c.set(k, x, d)
 	c.Unlock()
@@ -154,104 +159,169 @@ func (c *cache) IncrementFloat(k string, n float64) error {
 }
 
 // Increment an item of type int, int8, int16, int32, int64, uintptr, uint,
-// uint8, uint32, or uint64, float32 or float64 by n. Returns an error if the
+// uint8, uint32, or uint64 by n. Returns an error if the
 // item's value is not an integer, if it was not found, or if it is not
 // possible to increment it by n.
-func (c *cache) Increment(k string, n int64) error {
+// Wraps around on overlow.
+func (c *cache) Increment(k string, n uint64) (uint64, error) {
 	c.Lock()
+	defer c.Unlock()
 	v, found := c.items[k]
 	if !found || v.Expired() {
-		c.Unlock()
-		return fmt.Errorf("item not found")
+		return 0, ErrCacheMiss
 	}
 	switch v.Object.(type) {
 	case int:
 		v.Object = v.Object.(int) + int(n)
+		return uint64(v.Object.(int)), nil
 	case int8:
 		v.Object = v.Object.(int8) + int8(n)
+		return uint64(v.Object.(int8)), nil
 	case int16:
 		v.Object = v.Object.(int16) + int16(n)
+		return uint64(v.Object.(int16)), nil
 	case int32:
 		v.Object = v.Object.(int32) + int32(n)
+		return uint64(v.Object.(int32)), nil
 	case int64:
-		v.Object = v.Object.(int64) + n
+		v.Object = v.Object.(int64) + int64(n)
+		return uint64(v.Object.(int64)), nil
 	case uint:
 		v.Object = v.Object.(uint) + uint(n)
+		return uint64(v.Object.(uint)), nil
 	case uintptr:
 		v.Object = v.Object.(uintptr) + uintptr(n)
+		return uint64(v.Object.(uintptr)), nil
 	case uint8:
 		v.Object = v.Object.(uint8) + uint8(n)
+		return uint64(v.Object.(uint8)), nil
 	case uint16:
 		v.Object = v.Object.(uint16) + uint16(n)
+		return uint64(v.Object.(uint16)), nil
 	case uint32:
 		v.Object = v.Object.(uint32) + uint32(n)
+		return uint64(v.Object.(uint32)), nil
 	case uint64:
-		v.Object = v.Object.(uint64) + uint64(n)
-	case float32:
-		v.Object = v.Object.(float32) + float32(n)
-	case float64:
-		v.Object = v.Object.(float64) + float64(n)
-	default:
-		c.Unlock()
-		return fmt.Errorf("The value for %s is not an integer", k)
+		v.Object = v.Object.(uint64) + n
+		return uint64(v.Object.(uint64)), nil
 	}
-	c.Unlock()
-	return nil
+	return 0, fmt.Errorf("The value for %s is not an integer", k)
 }
 
 // Decrement an item of type int, int8, int16, int32, int64, uintptr, uint,
-// uint8, uint32, or uint64, float32 or float64 by n. Returns an error if the
+// uint8, uint32, or uint64 by n. Returns an error if the
 // item's value is not an integer, if it was not found, or if it is not
 // possible to decrement it by n.
-func (c *cache) Decrement(k string, n int64) error {
+// Stops at 0 on underflow.
+func (c *cache) Decrement(k string, n uint64) (uint64, error) {
 	// TODO: Implement Increment and Decrement more cleanly.
 	// (Cannot do Increment(k, n*-1) for uints.)
 	c.Lock()
+	defer c.Unlock()
 	v, found := c.items[k]
 	if !found || v.Expired() {
-		c.Unlock()
-		return fmt.Errorf("item not found")
+		return 0, ErrCacheMiss
 	}
 	switch v.Object.(type) {
 	case int:
-		v.Object = v.Object.(int) - int(n)
+		vi := v.Object.(int)
+		if vi > int(n) {
+			v.Object = vi - int(n)
+		} else {
+			v.Object = int(0)
+		}
+		return uint64(v.Object.(int)), nil
 	case int8:
-		v.Object = v.Object.(int8) - int8(n)
+		vi := v.Object.(int8)
+		if vi > int8(n) {
+			v.Object = vi - int8(n)
+		} else {
+			v.Object = int8(0)
+		}
+		return uint64(v.Object.(int8)), nil
 	case int16:
-		v.Object = v.Object.(int16) - int16(n)
+		vi := v.Object.(int16)
+		if vi > int16(n) {
+			v.Object = vi - int16(n)
+		} else {
+			v.Object = int16(0)
+		}
+		return uint64(v.Object.(int16)), nil
 	case int32:
-		v.Object = v.Object.(int32) - int32(n)
+		vi := v.Object.(int32)
+		if vi > int32(n) {
+			v.Object = vi - int32(n)
+		} else {
+			v.Object = int32(0)
+		}
+		return uint64(v.Object.(int32)), nil
 	case int64:
-		v.Object = v.Object.(int64) - n
+		vi := v.Object.(int64)
+		if vi > int64(n) {
+			v.Object = vi - int64(n)
+		} else {
+			v.Object = int64(0)
+		}
+		return uint64(v.Object.(int64)), nil
 	case uint:
-		v.Object = v.Object.(uint) - uint(n)
+		vi := v.Object.(uint)
+		if vi > uint(n) {
+			v.Object = vi - uint(n)
+		} else {
+			v.Object = uint(0)
+		}
+		return uint64(v.Object.(uint)), nil
 	case uintptr:
-		v.Object = v.Object.(uintptr) - uintptr(n)
+		vi := v.Object.(uintptr)
+		if vi > uintptr(n) {
+			v.Object = vi - uintptr(n)
+		} else {
+			v.Object = uintptr(0)
+		}
+		return uint64(v.Object.(uintptr)), nil
 	case uint8:
-		v.Object = v.Object.(uint8) - uint8(n)
+		vi := v.Object.(uint8)
+		if vi > uint8(n) {
+			v.Object = vi - uint8(n)
+		} else {
+			v.Object = uint8(0)
+		}
+		return uint64(v.Object.(uint8)), nil
 	case uint16:
-		v.Object = v.Object.(uint16) - uint16(n)
+		vi := v.Object.(uint16)
+		if vi > uint16(n) {
+			v.Object = vi - uint16(n)
+		} else {
+			v.Object = uint16(0)
+		}
+		return uint64(v.Object.(uint16)), nil
 	case uint32:
-		v.Object = v.Object.(uint32) - uint32(n)
+		vi := v.Object.(uint32)
+		if vi > uint32(n) {
+			v.Object = vi - uint32(n)
+		} else {
+			v.Object = uint32(0)
+		}
+		return uint64(v.Object.(uint32)), nil
 	case uint64:
-		v.Object = v.Object.(uint64) - uint64(n)
-	case float32:
-		v.Object = v.Object.(float32) - float32(n)
-	case float64:
-		v.Object = v.Object.(float64) - float64(n)
-	default:
-		c.Unlock()
-		return fmt.Errorf("The value for %s is not an integer", k)
+		vi := v.Object.(uint64)
+		if vi > uint64(n) {
+			v.Object = vi - uint64(n)
+		} else {
+			v.Object = uint64(0)
+		}
+		return uint64(v.Object.(uint64)), nil
 	}
-	c.Unlock()
-	return nil
+	return 0, fmt.Errorf("The value for %s is not an integer", k)
 }
 
 // Delete an item from the cache. Does nothing if the key is not in the cache.
-func (c *cache) Delete(k string) {
+func (c *cache) Delete(k string) (found bool) {
 	c.Lock()
+	_, found = c.get(k)
 	c.delete(k)
 	c.Unlock()
+	return
 }
 
 func (c *cache) delete(k string) {
@@ -433,7 +503,7 @@ func (sc *shardedCache) Get(k string) (interface{}, bool) {
 	return sc.bucket(k).Get(k)
 }
 
-func (sc *shardedCache) Increment(k string, n int64) error {
+func (sc *shardedCache) Increment(k string, n uint64) (uint64, error) {
 	return sc.bucket(k).Increment(k, n)
 }
 
@@ -441,7 +511,7 @@ func (sc *shardedCache) IncrementFloat(k string, n float64) error {
 	return sc.bucket(k).IncrementFloat(k, n)
 }
 
-func (sc *shardedCache) Decrement(k string, n int64) error {
+func (sc *shardedCache) Decrement(k string, n uint64) (uint64, error) {
 	return sc.bucket(k).Decrement(k, n)
 }
 
