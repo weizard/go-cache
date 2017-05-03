@@ -34,6 +34,12 @@ type unexportedInterface interface {
 	LoadFile(io.Reader) error
 }
 
+type ListItem struct{
+	LIK string //key
+	LIV interface{} // value
+	LIT *time.Duration // expiration time
+}
+
 type item struct {
 	Object     interface{}
 	Expiration *time.Time
@@ -111,6 +117,22 @@ func (c *cache) Replace(k string, x interface{}, d time.Duration) error {
 	c.set(k, x, d)
 	c.Unlock()
 	return nil
+}
+
+//
+// List all items in the cache. 
+func (c *cache)List()[]ListItem{
+	LI := []ListItem{}
+	for ik, iv := range c.items{
+		var tempLI ListItem
+		tempLI.LIK = ik
+		tempLI.LIV = iv.Object
+		var tempTIME time.Duration
+		tempTIME = iv.Expiration.Sub(time.Now()) 
+		tempLI.LIT = &tempTIME
+		LI = append(LI,tempLI)
+	}
+	return LI
 }
 
 // Get an item from the cache. Returns the item or nil, and a bool indicating
