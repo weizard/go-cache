@@ -1,0 +1,17 @@
+
+workspace:
+  base: /go
+  path: /Users/ncu/go/src/github.com/weizard/go-cache
+
+
+clone:
+  git:
+    image: plugins/git
+    depth: 50
+    tags: true
+
+pipeline:
+  step1:
+    image: golang:1.8.5
+    command:
+      - go test
