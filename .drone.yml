@@ -1,5 +1,5 @@
 pipeline:
   step1:
     image: golang:1.8.5
-    command:
+    commands:
       - go test
