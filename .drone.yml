@@ -2,4 +2,4 @@ pipeline:
   step1:
     image: golang:1.8.5
     commands:
-      - go test
+      - go test -v
